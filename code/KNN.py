@@ -19,7 +19,7 @@ kar = pd.read_csv('data/mfeat-kar', sep='\t', header=None)
 # preprocessing
 #==================================
 
-#------------- transform data to pandas df 
+# transform data to pandas df 
 def multiFeaturesData(data, view):
     data_pd = {}
     for line in data[0]:
@@ -44,7 +44,7 @@ kar = pd.DataFrame(multiFeaturesData(kar, 'view_kar_'))
 # combine data
 dataset = pd.concat([fac,fou,kar],axis=1)
 
-# normalization of data
+# normalization of data by mean
 def normalize(dataset):
     for col in dataset.columns:
         dataset[col] = [float(x) for x in dataset[col]]
@@ -55,7 +55,7 @@ def normalize(dataset):
 
 dataset = normalize(dataset)
 
-#---------- make target of data
+# make target of classification
 target =[]
 cont=1
 for i in range(10):
@@ -66,29 +66,26 @@ for i in range(10):
 
 dataset['target'] = target
 
-# shuffle data and make k fold
+# random shuffle data and make k fold
 dataset = dataset.sample(frac=1).reset_index(drop=True)
 dataset['kfold'] = target
-
-# divide
-fold = 0
-
-features_train = dataset[dataset['kfold']!=fold].drop(['target', 'kfold'], axis=1)
-target_train = dataset['target'][dataset['kfold']!=fold]
-features_test = dataset[dataset['kfold']==fold].drop(['target', 'kfold'], axis=1)
-target_test = dataset['target'][dataset['kfold']==fold]
-
 
 #===================
 # KNN
 #===================
 
 def select_view(data, view):
+    ''' function to select view data
+    '''
     cols = [x for x in data.columns if view in x ]
     return data[cols]
 
 
 def KnnViewModelling(features_train, target_train, features_test, target_test):
+    ''' build and run models for each view,
+        combine probabilities of models for the final
+        decision, return accuracy of model  
+    '''
 
     # build models for each view and return probabilities
     from sklearn.neighbors import KNeighborsClassifier
@@ -122,7 +119,7 @@ def KnnViewModelling(features_train, target_train, features_test, target_test):
     return accuracy, predictions
 
 
-#### 30 times 10 K-FOLD EXPERIMENT
+##### 30 times 10 k-fold experiment #####
 experiments_results = []
 for fold in dataset['kfold'].unique():
     print(fold)
@@ -135,10 +132,7 @@ for fold in dataset['kfold'].unique():
         acc, preds = KnnViewModelling(features_train, target_train, features_test, target_test)
         experiments_results.append(acc)
         cont+=1
-    print(experiments_results)
 
 #### save experiment data
 results_data = pd.DataFrame({'results': experiments_results})
 results_data.to_csv('results_knn_experiment.csv')
-
-results_data['results'].mean()
