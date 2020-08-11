@@ -70,6 +70,9 @@ dataset['target'] = target
 dataset = dataset.sample(frac=1).reset_index(drop=True)
 dataset['kfold'] = target
 
+# save data
+dataset.to_csv('data/preprocessed_data.csv', index=False)
+
 #===================
 # KNN
 #===================
