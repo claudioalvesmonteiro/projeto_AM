@@ -13,7 +13,6 @@ import numpy as np
 # import data
 df = pd.read_csv('data/preprocessed_mfeat.csv')
 
-
 #==================================
 # calculate dissimilarity matrix
 #==================================
