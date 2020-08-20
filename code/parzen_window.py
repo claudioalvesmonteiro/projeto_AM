@@ -1,102 +1,108 @@
+'''
+Projeto Disciplina Aprendizagem de Maquina
+Atividade 2 parte III - Parzen Window
 
-
-
+@claudioalvesmonteiro
+'''
 
 # https://stats.stackexchange.com/questions/186269/probabilistic-classification-using-kernel-density-estimation
-
-
 # https://stackoverflow.com/questions/41577705/how-does-2d-kernel-density-estimation-in-python-sklearn-work
 
 # import packages
 import pandas as pd
+import numpy as np
+import pandas as pd
+pd.options.mode.chained_assignment = None  
 
 # import data
-df = pd.read_csv('data/preprocessed_mfeat.csv')
-
-# 
-df.head()
-
-
-
+dataset = pd.read_csv('data/preprocessed_mfeat.csv')
 
 #=============================================
 # PARZEN WINDOW [kernel desnity estimation]
 #=============================================
 
-import numpy as np
-from sklearn.neighbors.kde import KernelDensity
-from matplotlib import pyplot as plt
-sp = 0.01
-
-samples = np.random.uniform(0,1,size=(50,2))  # random samples
-x = y = np.linspace(0,1,100)
-X,Y = np.meshgrid(x,y)     # creating grid of data , to evaluate estimated density on
-
-
 from sklearn.neighbors import KernelDensity
 
-#def kde2D(x, y, bandwidth, xbins=100j, ybins=100j, **kwargs): 
-#    """Build 2D kernel density estimate (KDE)."""
+class ParzenMulticlassKDE():
+    
+    def __init__(self):
+        self.models = {}
 
-# create grid of sample locations (default: 100x100)
-xbins=100j; ybins=100j
+    def train(self, data):
+        from sklearn.neighbors import KernelDensity
+        for classe in data['target'].unique():
+            data_class = data[data['target'] == classe]
+            data_class.drop('target', axis=1, inplace=True)
+            parzen_model = KernelDensity(bandwidth=0.2)
+            parzen_model.fit(data_class.values)
+            self.models[classe] = parzen_model
+    
+    def predict_proba(self, test_data):
+        final_preds =[]
+        models_preds = []
+        # capture probs for each example
+        for i in range(10):
+            models_preds.append(np.exp(self.models[i].score_samples(test_data)))
+        # normalize probs
+        for i in range(len(models_preds[0])):
+            each_pred =[]
+            for preds in models_preds:
+                each_pred.append(preds[i])
+            norm_prob = (each_pred - min(each_pred)) / (each_pred - min(each_pred) ).sum()
+            if np.isnan(np.sum(norm_prob)):
+                norm_prob = [0]*10
+            final_preds.append(norm_prob)
+        return np.array(final_preds)
+    
+    def predict(self, test_data):
+        decision = []
+        pred_array = self.predict_proba(test_data)
+        for pred in pred_array:
+            decision_index = np.where(pred == max(pred))[0][0]
+            decision.append(decision_index)
+        return decision
 
-xx, yy = np.mgrid[x.min():x.max():xbins, y.min():y.max():ybins]
+#===============================
+# compute each view and combine
+#===============================
 
-xy_sample = np.vstack([yy.ravel(), xx.ravel()]).T
-xy_train  = np.vstack([y, x]).T
-
-kde_skl = KernelDensity(bandwidth=0.2)
-kde_skl.fit(xy_train)
-
-# score_samples() returns the log-likelihood of the samples
-np.exp(kde_skl.score_samples(xy_sample))
-
-
-### SEPA
-
-# construir um KDE pra cada classe
-
-# retorna o KDE prob para aquela classe
-
-# combinar os KDEs para retornar classe com maior valor 
-
-
-
-def select_view(data, view):
+def select_view(data, view, train=True):
     ''' function to select view data
     '''
     cols = [x for x in data.columns if view in x ]
+    if train == True:
+        cols.append('target')
     return data[cols]
 
 
-def KnnViewModelling(features_train, target_train, features_test, target_test):
+def parzen_view_modelling(train_data, test_data):
     ''' build and run models for each view,
         combine probabilities of models for the final
         decision, return accuracy of model  
     '''
+    target_test = test_data['target']
+    test_data.drop('target', axis=1, inplace=True)
 
     # build models for each view and return probabilities
-    from sklearn.neighbors import KNeighborsClassifier
-    knn_view1 = KNeighborsClassifier(n_neighbors=3, weights='distance')
-    knn_view1.fit(select_view(features_train, 'view_fac'), target_train)
-    pred_knn_view1 = list(knn_view1.predict_proba(select_view(features_test,  'view_fac')))
+    parzen_view1 =  ParzenMulticlassKDE()
+    parzen_view1.train(select_view(train_data, 'view_fac'))
+    pred_parzen_view1 = parzen_view1.predict_proba(select_view(test_data,  'view_fac', train=False))
 
-    knn_view2 = KNeighborsClassifier(n_neighbors=3, weights='distance')
-    knn_view2.fit(select_view(features_train, 'view_fou'), target_train)
-    pred_knn_view2 = list(knn_view2.predict_proba(select_view(features_test,  'view_fou')))
+    parzen_view2 = ParzenMulticlassKDE()
+    parzen_view2.train(select_view(train_data, 'view_fou'))
+    pred_parzen_view2 = list(parzen_view2.predict_proba(select_view(test_data,  'view_fou', train=False)))
 
-    knn_view3 = KNeighborsClassifier(n_neighbors=3, weights='distance')
-    knn_view3.fit(select_view(features_train, 'view_kar'), target_train)
-    pred_knn_view3 = list(knn_view3.predict_proba(select_view(features_test,  'view_kar')))
+    parzen_view3 = ParzenMulticlassKDE()
+    parzen_view3.train(select_view(train_data, 'view_kar'))
+    pred_parzen_view3 = list(parzen_view3.predict_proba(select_view(test_data,  'view_kar', train=False)))
 
     # probability combination
     predictions = []
-    for i in range(len(features_test)):
+    for i in range(len(test_data)):
         # sum probs
-        sum_prob = pred_knn_view1[i]+pred_knn_view2[i]+pred_knn_view3[i]
+        sum_prob = pred_parzen_view1[i]+pred_parzen_view2[i]+pred_parzen_view3[i]
         # normalize
-        norm_prob = (sum_prob - sum_prob.min()) / (sum_prob - sum_prob.min()).sum()
+        norm_prob = (sum_prob - min(sum_prob)) / (sum_prob - min(sum_prob) ).sum()
         # decision
         decision = np.where(norm_prob == max(norm_prob))[0][0]
         predictions.append(decision)
@@ -106,3 +112,27 @@ def KnnViewModelling(features_train, target_train, features_test, target_test):
     accuracy = sum(correct_shots)/len(correct_shots)
     
     return accuracy, predictions
+
+
+#=======================================#
+#    30 times 10 k-fold experiment      #
+#=======================================#
+
+experiments_results = []
+for fold in dataset['kfold'].unique():
+    print('FOLD: '+str(fold))
+    cont=1
+    while cont <= 10:
+        # select fold test and train data
+        train_data = dataset[dataset['kfold']!=fold].reset_index(drop=True)
+        test_data = dataset[dataset['kfold']==fold].reset_index(drop=True)
+        # parzen mix modelling
+        acc, preds = parzen_view_modelling(train_data, test_data)
+        # append results
+        experiments_results.append(acc)
+        cont+=1
+
+#### save experiment data
+results_data = pd.DataFrame({'results': experiments_results})
+results_data.to_csv('results_parzen_experiment.csv')
+
